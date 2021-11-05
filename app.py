@@ -277,7 +277,5 @@ def update_output_div(eps,n_clusters,features,lat,lon):
     return fig
 
 
-#if __name__ == '__main__':
-#    app.run_server(debug=True)
-
-app.run_server(debug=False, use_reloader=False)
+if __name__ == '__main__':
+    app.run_server(debug=True, use_reloader=False)
