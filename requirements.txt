@@ -69,8 +69,6 @@ matplotlib==3.4.3
 matplotlib-inline==0.1.2
 mccabe==0.6.1
 mistune==0.8.4
-mkl-random==1.2.1
-mkl-service==2.3.0
 more-itertools==8.7.0
 multidict==5.1.0
 munch==2.5.0
