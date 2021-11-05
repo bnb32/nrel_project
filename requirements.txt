@@ -150,3 +150,4 @@ Werkzeug==2.0.1
 wheel==0.36.2
 wrapt==1.11.2
 yarl==1.6.3
+gunicorn==19.9.0
