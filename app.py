@@ -205,7 +205,7 @@ server = app.server
 app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width':'100%', 'textAlign': 'center','font-size': '25px',"padding-top": "1px"}),
     html.Div([
         "DBSCAN eps: ",
-        dcc.Input(id='eps', value=0.01, type='text')
+        dcc.Input(id='eps', value=0.1, type='text')
     ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     html.Div([
         "DBSCAN min_pts: ",
