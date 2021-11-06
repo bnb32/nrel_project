@@ -232,7 +232,7 @@ app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width
         )
 
 ],style={"width": "1800px",
-         "height": "900px",
+         "height": "950px",
          "display": "inline-block",
          "border": "3px #5c5c5c solid",
          "padding-top": "1px",
