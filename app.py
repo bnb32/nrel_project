@@ -62,8 +62,23 @@ def get_optimal_eps(df,features=None):
     distances = distances[:,1]
     return distances[np.argmax(curvature(distances))]
 
-def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title=''):
-    fig.add_trace(go.Scattergeo(
+def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
+    if initialize:
+        fig.add_trace(go.Scattergeo(
+        lon = df['longitude'],
+        lat = df['latitude'],
+        text = df[field],
+        mode = 'markers',
+        marker_color = df[field],
+        showlegend=False,
+        marker = dict(colorscale='inferno',
+                      colorbar=dict(x=x,y=y,len=clen,thickness=7,
+                                    title=cbar_title,titleside='right',
+                                    titlefont=dict(family='Courier New',size=12),
+                                    tickfont=dict(family='Courier New',size=12))),
+        ),row=row,col=col)
+    else:
+        fig.update_traces(go.Scattergeo(
         lon = df['longitude'],
         lat = df['latitude'],
         text = df[field],
@@ -103,17 +118,12 @@ def get_corrs(df,lat=40,lon=-105,features=None):
     df_corrs = df_scaled.T.corr()
     return df_corrs.iloc[closest_lat_lon(df,lat=lat,lon=lon)]
 
-def init_figure(features=['ghi']):
-
-    return fig
-
 def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105,min_pts=3,initialize=False):
     feature_units = ['','','','','','','','','','','','','','','','',
                      'm','m2','hPa','W/m2','Celsius','Celsius',
                      'unitless',"type",'m/s','%','W/m2','degrees',
                      'cm','W/m2','W/m2','W/m2','W/m2','unitless','hPa',
                      '','','degrees','atm-cm','']
-    
     base_features = ['dbscan_cluster',None,None,'kmeans_cluster',None,None,'Correlations',None,
                      None,None,None,None,None,None,None,None,
                     'elevation', 'landcover', 'surface_pressure',
@@ -125,17 +135,7 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
     
 #titles = (f'*{f}*' if f in features else f'{f}' for f in base_features if f is not None)
     titles = (f'{f}' for f in base_features if f is not None)
-
-    if initialize:
-        fig = make_subplots(rows=5, cols=8,column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
-                            row_heights=[1,1,1,1,1,],
-                            specs=[[{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
-                                   [None,None,None,None,None,None,None,None],
-                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
-        subplot_titles=list(titles))
-
+    
     if n_clusters is None:
         n_clusters = get_optimal_k(df,features)
     if eps is None:
@@ -147,10 +147,25 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
     df,dist = cluster_data_kmeans(df,
                                   n_clusters=n_clusters,
                                   features=features)
+    
+    if initialize:
+
+
+        fig = make_subplots(
+    rows=5, cols=8,
+    column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
+    row_heights=[1,1,1,1,1,],
+    specs=[
+           [{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
+           [None,None,None,None,None,None,None,None],
+           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
+    subplot_titles=list(titles))
 
     colorbar_x = [0.085+i*(1.0/8+0.003) for i in range(8)]
     colorbar_y = [0.92-i*(1.0/5+0.0135) for i in range(5)]
-
+    
     corrs = get_corrs(df,features=features,lat=lat,lon=lon)
 
     for i,field in enumerate(base_features):
@@ -163,20 +178,30 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
             #print(row_idx,col_idx)
             if row_idx==0:
                 if col_idx==0:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.21,0.85,clen=0.25,cbar_title=cbar_title)
+                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.21,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
                 if col_idx==3:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.59,0.85,clen=0.25,cbar_title=cbar_title)
+                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.59,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
                 if col_idx==6:
-                    fig.add_trace(go.Scattergeo(lon = df['longitude'],
+                    if initialize:
+                        fig.add_trace(go.Scattergeo(lon = df['longitude'],
                               lat = df['latitude'],
                               text = corrs,
                               mode = 'markers',
                               marker_color = corrs,
                               marker = dict(colorscale='inferno',colorbar=dict(x=0.98,y=0.85,len=0.25,thickness=7)),
-                              showlegend=False),row=1,col=7)
-            else:
+                              showlegend=False),row=1,col=7) 
+                    else:
+                        fig.update_traces(go.Scattergeo(lon = df['longitude'],
+                              lat = df['latitude'],
+                              text = corrs,
+                              mode = 'markers',
+                              marker_color = corrs,
+                              marker = dict(colorscale='inferno',colorbar=dict(x=0.98,y=0.85,len=0.25,thickness=7)),
+                              showlegend=False),row=1,col=7) 
+                        
+            else:        
                 if initialize:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title)
+                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title,initialize=initialize)
 
     fig.update_geos(scope='usa')
     fig.update_layout(
@@ -188,7 +213,7 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
         if i['text'] in features:
             i['font'] = dict(size=14,color='red')
         else:
-            i['font'] = dict(size=14)
+            i['font'] = dict(size=14)       
     return fig
 
 base_features = [
@@ -305,7 +330,7 @@ def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
     fig = generate_figure(df,fig,features,
                           n_clusters=n_clusters,
                           eps=eps,min_pts=min_pts,
-                          lat=lat,lon=lon,initialize=True)
+                          lat=lat,lon=lon,initialize=False)
     return fig
 
 
