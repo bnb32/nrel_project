@@ -28,9 +28,9 @@ def cluster_data_kmeans(df,n_clusters=8,features=None):
     df['kmeans_cluster'] = clusters.labels_
     return df,clusters.inertia_
 
-def cluster_data_dbscan(df_scaled,eps=0.1,features=None):
+def cluster_data_dbscan(df_scaled,eps=0.1,min_pts=15,features=None):
     df_scaled = scale_data(df,features)
-    clusters = DBSCAN(eps=eps).fit(df_scaled)
+    clusters = DBSCAN(eps=eps,min_samples=min_pts).fit(df_scaled)
     df['dbscan_cluster'] = clusters.labels_
     return df
 
@@ -104,7 +104,7 @@ def get_corrs(df,lat=40,lon=-105,features=None):
     return df_corrs.iloc[closest_lat_lon(df,lat=lat,lon=lon)]
 
 
-def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105):
+def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,min_pts=15,lat=40,lon=-105):
     feature_units = ['','','','','','','','','','','','','','','','',
                      'm','m2','hPa','W/m2','Celsius','Celsius',
                      'unitless',"type",'m/s','%','W/m2','degrees',
@@ -116,6 +116,7 @@ def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105
         eps = get_optimal_eps(df,features)
     df = cluster_data_dbscan(df,
                              eps=eps,
+                             min_pts=min_pts,
                              features=features)
     df,dist = cluster_data_kmeans(df,
                                   n_clusters=n_clusters,
@@ -205,23 +206,27 @@ app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width
     html.Div([
         "DBSCAN eps: ",
         dcc.Input(id='eps', value=0.01, type='text')
-    ],style={'width': '25%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
+    ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
+    html.Div([
+        "DBSCAN min_pts: ",
+        dcc.Input(id='min_pts', value=15, type='text')
+    ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     html.Div([
         "KMeans n_clusters: ",
         dcc.Input(id='n_clusters', value=5, type='text')
-    ],style={'width': '25%', 'display': 'inline-block','textAlign':'center'}),
+    ],style={'width': '20%', 'display': 'inline-block','textAlign':'center'}),
      html.Div([
         "Corr lat: ",
         dcc.Input(id='lat', value=40, type='text')
-    ],style={'width': '25%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
+    ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     html.Div([
         "Corr lon: ",
         dcc.Input(id='lon', value=-105, type='text')
-    ],style={'width': '25%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
+    ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     #html.H6('Feature Selection:',style={'width':'100%', 'textAlign': 'center','font-size': '26px'}),
     dcc.Dropdown(id='features',
     options=dropdown_options,
-    value=['ghi'],
+    value=['ghi','dni','dhi'],
     multi=True,
     style={'width':'1800px', 'textAlign': 'center'}),
     html.Div([dcc.Graph(id='my-output')],style={'width':'90%','textAlign': 'center'}),
@@ -243,12 +248,13 @@ app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width
 @app.callback(
     Output(component_id='my-output', component_property='figure'),
     [Input(component_id='eps', component_property='value'),
+     Input(component_id='min_pts', component_property='value'),
      Input(component_id='n_clusters', component_property='value'),
      Input(component_id='features', component_property='value'),
      Input(component_id='lat', component_property='value'),
      Input(component_id='lon', component_property='value')]
 )
-def update_output_div(eps,n_clusters,features,lat,lon):
+def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
     if eps is not None:
         try:
             eps = float(eps)
@@ -256,6 +262,13 @@ def update_output_div(eps,n_clusters,features,lat,lon):
                 eps = None
         except:
             eps = None
+    if min_pts is not None:
+        try:
+            min_pts = int(min_pts)
+            if min_pts <= 0:
+                min_pts = 15
+        except:
+            min_pts = 15
     if n_clusters is not None:
         try:
             n_clusters = int(n_clusters)
@@ -274,8 +287,11 @@ def update_output_div(eps,n_clusters,features,lat,lon):
         except:
             lon = -105
     if not features:
-        features = ['ghi']
-    fig = generate_figure(df,features,n_clusters=n_clusters,eps=eps,lat=lat,lon=lon)
+        features = ['ghi','dni','dhi']
+    fig = generate_figure(df,features,
+                          n_clusters=n_clusters,
+                          eps=eps,min_pts=min_pts,
+                          lat=lat,lon=lon)
     return fig
 
 
