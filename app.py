@@ -103,13 +103,39 @@ def get_corrs(df,lat=40,lon=-105,features=None):
     df_corrs = df_scaled.T.corr()
     return df_corrs.iloc[closest_lat_lon(df,lat=lat,lon=lon)]
 
+def init_figure(features=['ghi']):
 
-def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,min_pts=15,lat=40,lon=-105):
+    return fig
+
+def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105,min_pts=3,initialize=False):
     feature_units = ['','','','','','','','','','','','','','','','',
                      'm','m2','hPa','W/m2','Celsius','Celsius',
                      'unitless',"type",'m/s','%','W/m2','degrees',
                      'cm','W/m2','W/m2','W/m2','W/m2','unitless','hPa',
                      '','','degrees','atm-cm','']
+    
+    base_features = ['dbscan_cluster',None,None,'kmeans_cluster',None,None,'Correlations',None,
+                     None,None,None,None,None,None,None,None,
+                    'elevation', 'landcover', 'surface_pressure',
+                    'ghi', 'air_temperature', 'dew_point', 'surface_albedo', 'cloud_type',
+                    'wind_speed', 'relative_humidity', 'dni', 'solar_zenith_angle',
+                    'total_precipitable_water', 'dhi', 'clearsky_dhi', 'clearsky_ghi',
+                    'clearsky_dni', 'aod', 'cloud_press_acha','cld_opd_dcomp',
+                    'cld_reff_dcomp', 'wind_direction','ozone','ssa']
+    
+#titles = (f'*{f}*' if f in features else f'{f}' for f in base_features if f is not None)
+    titles = (f'{f}' for f in base_features if f is not None)
+
+    if initialize:
+        fig = make_subplots(rows=5, cols=8,column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
+                            row_heights=[1,1,1,1,1,],
+                            specs=[[{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
+                                   [None,None,None,None,None,None,None,None],
+                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+                                   [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
+        subplot_titles=list(titles))
+
     if n_clusters is None:
         n_clusters = get_optimal_k(df,features)
     if eps is None:
@@ -121,33 +147,10 @@ def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,min_pts=15,lat=
     df,dist = cluster_data_kmeans(df,
                                   n_clusters=n_clusters,
                                   features=features)
-    
-    base_features = ['dbscan_cluster',None,None,'kmeans_cluster',None,None,'Correlations',None,
-                     None,None,None,None,None,None,None,None,
-                    'elevation', 'landcover', 'surface_pressure',
-                    'ghi', 'air_temperature', 'dew_point', 'surface_albedo', 'cloud_type',
-                    'wind_speed', 'relative_humidity', 'dni', 'solar_zenith_angle',
-                    'total_precipitable_water', 'dhi', 'clearsky_dhi', 'clearsky_ghi',
-                    'clearsky_dni', 'aod', 'cloud_press_acha','cld_opd_dcomp',
-                    'cld_reff_dcomp', 'wind_direction','ozone','ssa']
-    
-    titles = (f'*{f}*' if f in features else f'{f}' for f in base_features if f is not None)
-
-    fig = make_subplots(
-    rows=5, cols=8,
-    column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
-    row_heights=[1,1,1,1,1,],
-    specs=[
-           [{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
-           [None,None,None,None,None,None,None,None],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
-    subplot_titles=list(titles))
 
     colorbar_x = [0.085+i*(1.0/8+0.003) for i in range(8)]
     colorbar_y = [0.92-i*(1.0/5+0.0135) for i in range(5)]
-    
+
     corrs = get_corrs(df,features=features,lat=lat,lon=lon)
 
     for i,field in enumerate(base_features):
@@ -170,9 +173,10 @@ def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,min_pts=15,lat=
                               mode = 'markers',
                               marker_color = corrs,
                               marker = dict(colorscale='inferno',colorbar=dict(x=0.98,y=0.85,len=0.25,thickness=7)),
-                              showlegend=False),row=1,col=7)    
-            else:        
-                fig = add_subplot(fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title)
+                              showlegend=False),row=1,col=7)
+            else:
+                if initialize:
+                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title)
 
     fig.update_geos(scope='usa')
     fig.update_layout(
@@ -181,10 +185,10 @@ def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,min_pts=15,lat=
     height=700, width=1800,
     )
     for n,i in enumerate(fig['layout']['annotations']):
-        if '*' in i['text']:# in features:
+        if i['text'] in features:
             i['font'] = dict(size=14,color='red')
         else:
-            i['font'] = dict(size=14)       
+            i['font'] = dict(size=14)
     return fig
 
 base_features = [
@@ -202,18 +206,27 @@ for f in base_features:
 app = dash.Dash(__name__)
 server = app.server
 
+default_features = ['ghi','dhi','dni']
+default_eps = 0.1
+default_n_clusters = 5
+default_min_pts = 15
+
+global fig
+fig = None
+fig = generate_figure(df,fig,features=default_features,n_clusters=default_n_clusters,eps=default_eps,min_pts=default_min_pts,initialize=True)
+
 app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width':'100%', 'textAlign': 'center','font-size': '25px',"padding-top": "1px"}),
     html.Div([
         "DBSCAN eps: ",
-        dcc.Input(id='eps', value=0.1, type='text')
+        dcc.Input(id='eps', value=default_eps, type='text')
     ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     html.Div([
         "DBSCAN min_pts: ",
-        dcc.Input(id='min_pts', value=15, type='text')
+        dcc.Input(id='min_pts', value=default_min_pts, type='text')
     ],style={'width': '20%', 'display': 'inline-block','textAlign':'center','height':'10px'}),
     html.Div([
         "KMeans n_clusters: ",
-        dcc.Input(id='n_clusters', value=5, type='text')
+        dcc.Input(id='n_clusters', value=default_n_clusters, type='text')
     ],style={'width': '20%', 'display': 'inline-block','textAlign':'center'}),
      html.Div([
         "Corr lat: ",
@@ -226,7 +239,7 @@ app.layout = html.Div([html.H6('NSRDB Clustering and Correlations',style={'width
     #html.H6('Feature Selection:',style={'width':'100%', 'textAlign': 'center','font-size': '26px'}),
     dcc.Dropdown(id='features',
     options=dropdown_options,
-    value=['ghi','dni','dhi'],
+    value=default_features,
     multi=True,
     style={'width':'1800px', 'textAlign': 'center'}),
     html.Div([dcc.Graph(id='my-output')],style={'width':'90%','textAlign': 'center'}),
@@ -266,9 +279,9 @@ def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
         try:
             min_pts = int(min_pts)
             if min_pts <= 0:
-                min_pts = 15
+                min_pts = default_min_pts
         except:
-            min_pts = 15
+            min_pts = default_min_pts
     if n_clusters is not None:
         try:
             n_clusters = int(n_clusters)
@@ -287,11 +300,12 @@ def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
         except:
             lon = -105
     if not features:
-        features = ['ghi','dni','dhi']
-    fig = generate_figure(df,features,
+        features = default_features
+    global fig 
+    fig = generate_figure(df,fig,features,
                           n_clusters=n_clusters,
                           eps=eps,min_pts=min_pts,
-                          lat=lat,lon=lon)
+                          lat=lat,lon=lon,initialize=True)
     return fig
 
 
