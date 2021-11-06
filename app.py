@@ -186,11 +186,13 @@ def generate_figure(df,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105
             i['font'] = dict(size=14)       
     return fig
 
-base_features = ['elevation', 'landcover', 'surface_pressure',
-                 'ghi', 'air_temperature', 'dew_point', 'surface_albedo', 'cloud_type',
+base_features = [
+                 'elevation', 'landcover', 'surface_pressure', 'ghi', 
+                 'air_temperature', 'dew_point', 'surface_albedo', 'cloud_type',
                  'wind_speed', 'relative_humidity', 'dni', 'solar_zenith_angle',
                  'total_precipitable_water', 'dhi', 'clearsky_dhi', 'clearsky_ghi',
-                 'clearsky_dni', 'aod', 'cloud_press_acha','wind_direction','ozone','ssa']
+                 'clearsky_dni', 'aod', 'cloud_press_acha','cld_opd_dcomp',
+                 'cld_reff_dcomp', 'wind_direction','ozone','ssa']
 
 dropdown_options = []
 for f in base_features:
