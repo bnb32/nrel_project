@@ -16,6 +16,8 @@ import numpy as np
 
 pdf = pd.read_csv('nrel_df.csv')
 df = dd.from_pandas(pdf,npartitions=4)
+lats = df['latitude'].values.astype(float).compute()
+lons = df['longitude'].values.astype(float).compute()
 
 def scale_data(df,features=None):
     if features is None:
@@ -25,17 +27,13 @@ def scale_data(df,features=None):
     min_max_scaler.feature_names_in_=features
     return min_max_scaler.fit_transform(df)
 
-def cluster_data_kmeans(df,n_clusters=8,features=None):
-    df_scaled = scale_data(df,features)
-    clusters = KMeans(n_clusters=n_clusters, random_state=0).fit(df_scaled)
-    df['kmeans_cluster'] = dd.from_array(clusters.labels_)
-    return df,clusters.inertia_
+def cluster_data_kmeans(df,n_clusters=8):
+    clusters = KMeans(n_clusters=n_clusters, random_state=0).fit(df)
+    return clusters
 
-def cluster_data_dbscan(df_scaled,eps=0.1,min_pts=15,features=None):
-    df_scaled = scale_data(df,features)
-    clusters = DBSCAN(eps=eps,min_samples=min_pts).fit(df_scaled)
-    df['dbscan_cluster'] = dd.from_array(clusters.labels_)#pd.Series(clusters.labels_)
-    return df
+def cluster_data_dbscan(df,eps=0.1,min_pts=15):
+    clusters = DBSCAN(eps=eps,min_samples=min_pts).fit(df.compute())
+    return clusters
 
 def curvature(a):
     b = [0]*len(a)
@@ -48,28 +46,27 @@ def curvature(a):
             b[i] = (-2*a[i]+a[i-1])
     return b  
 
-def get_optimal_k(df,features=None):
+def get_optimal_k(df):
     distortions = []
     K = range(1,10)
     for k in K:
-        df,dist = cluster_data_kmeans(df,n_clusters=k,features=features)
-        distortions.append(dist)  
+        clusters = cluster_data_kmeans(df,n_clusters=k)
+        distortions.append(clusters.inertia_)
     return K[np.argmax(curvature(distortions))]
 
-def get_optimal_eps(df,features=None):
-    df_scaled = scale_data(df,features)
+def get_optimal_eps(df):
     neigh = NearestNeighbors(n_neighbors=2)
-    nbrs = neigh.fit(df_scaled)
-    distances, indices = nbrs.kneighbors(df_scaled)
+    nbrs = neigh.fit(df)
+    distances, indices = nbrs.kneighbors(df)
     distances = np.sort(distances, axis=0)
     distances = distances[:,1]
     return distances[np.argmax(curvature(distances))]
 
-def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
+def add_subplot(df,fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
     if initialize:
         fig.add_trace(go.Scattergeo(
-        lon = df['longitude'],
-        lat = df['latitude'],
+        lon = lons,
+        lat = lats,
         text = df[field],
         mode = 'markers',
         marker_color = df[field],
@@ -82,8 +79,8 @@ def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
         ),row=row,col=col)
     else:
         fig.update_traces(go.Scattergeo(
-        lon = df['longitude'],
-        lat = df['latitude'],
+        lon = lons,
+        lat = lats,
         text = df[field],
         mode = 'markers',
         marker_color = df[field],
@@ -96,9 +93,7 @@ def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
         ),row=row,col=col)
     return fig
 
-def closest_lat_lon(df,lat=40,lon=-105):
-    lats = df['latitude'].values.astype(float).compute()
-    lons = df['longitude'].values.astype(float).compute()
+def closest_lat_lon(lat=40,lon=-105):
     diff = np.inf
     index = 0
     for i in range(len(lats)):
@@ -106,20 +101,12 @@ def closest_lat_lon(df,lat=40,lon=-105):
         if dist < diff:
             index = i
             diff = dist
+    #print(f'closest idx: {index}')        
     return index        
 
-def get_corrs(df,lat=40,lon=-105,features=None):
-    min_max_scaler = preprocessing.MinMaxScaler()
-    if features is None:
-        features = [c for c in df.columns if c != 'latitude' and 
-                c != 'longitude' and c != 'cluster']# and 
-                #c != 'wind_speed' and c != 'clearsky_dhi' and
-                #c != 'clearsky_dni' and c != 'clearsky_ghi' and
-                #c != 'elevation' and c != 'landcover']
-    min_max_scaler.feature_names_in_=features
-    df_scaled = min_max_scaler.fit_transform(df)
-    df_corrs = df_scaled.compute().T.corr() #dd.corrcoef(df_scaled.to_dask_array())
-    return df_corrs.iloc[closest_lat_lon(df,lat=lat,lon=lon)]
+def get_corrs(df,lat=40,lon=-105):
+    df_corrs = df.compute().T.corr() 
+    return df_corrs.iloc[closest_lat_lon(lat=lat,lon=lon)]
 
 def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105,min_pts=3,initialize=False):
     feature_units = ['','','','','','','','','','','','','','','','',
@@ -139,37 +126,34 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
 #titles = (f'*{f}*' if f in features else f'{f}' for f in base_features if f is not None)
     titles = (f'{f}' for f in base_features if f is not None)
     
+    df_scaled = scale_data(df,features)
+
     if n_clusters is None:
-        n_clusters = get_optimal_k(df,features)
+        n_clusters = get_optimal_k(df_scaled)
     if eps is None:
-        eps = get_optimal_eps(df,features)
-    df = cluster_data_dbscan(df,
-                             eps=eps,
-                             min_pts=min_pts,
-                             features=features)
-    df,dist = cluster_data_kmeans(df,
-                                  n_clusters=n_clusters,
-                                  features=features)
+        eps = get_optimal_eps(df_scaled)
+    
+    df['dbscan_cluster'] = dd.from_array(cluster_data_dbscan(df_scaled,
+        eps=eps,min_pts=min_pts).labels_)
+    df['kmeans_cluster'] = dd.from_array(cluster_data_kmeans(df_scaled,
+        n_clusters=n_clusters).labels_)
     
     if initialize:
 
-
-        fig = make_subplots(
-    rows=5, cols=8,
-    column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
-    row_heights=[1,1,1,1,1,],
-    specs=[
-           [{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
-           [None,None,None,None,None,None,None,None],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
-           [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
-    subplot_titles=list(titles))
+        fig = make_subplots(rows=5, cols=8,
+                column_widths=[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],
+                row_heights=[1,1,1,1,1,],
+                specs=[[{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None,None,{"type":"scattergeo","rowspan":2,"colspan":2},None],
+                    [None,None,None,None,None,None,None,None],
+                    [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+                    [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}],
+                    [{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"},{"type":"scattergeo"}]],
+                subplot_titles=list(titles))
 
     colorbar_x = [0.085+i*(1.0/8+0.003) for i in range(8)]
     colorbar_y = [0.92-i*(1.0/5+0.0135) for i in range(5)]
     
-    corrs = get_corrs(df,features=features,lat=lat,lon=lon)
+    corrs = get_corrs(df_scaled,lat=lat,lon=lon)
 
     for i,field in enumerate(base_features):
         if field is None:
@@ -181,21 +165,21 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
             #print(row_idx,col_idx)
             if row_idx==0:
                 if col_idx==0:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.21,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
+                    fig = add_subplot(df,fig,field,row_idx+1,col_idx+1,0.21,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
                 if col_idx==3:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,0.59,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
+                    fig = add_subplot(df,fig,field,row_idx+1,col_idx+1,0.59,0.85,clen=0.25,cbar_title=cbar_title,initialize=initialize)
                 if col_idx==6:
                     if initialize:
-                        fig.add_trace(go.Scattergeo(lon = df['longitude'],
-                              lat = df['latitude'],
+                        fig.add_trace(go.Scattergeo(lon = lons,
+                              lat = lats,
                               text = corrs,
                               mode = 'markers',
                               marker_color = corrs,
                               marker = dict(colorscale='inferno',colorbar=dict(x=0.98,y=0.85,len=0.25,thickness=7)),
                               showlegend=False),row=1,col=7) 
                     else:
-                        fig.update_traces(go.Scattergeo(lon = df['longitude'],
-                              lat = df['latitude'],
+                        fig.update_traces(go.Scattergeo(lon = lons,
+                              lat = lats,
                               text = corrs,
                               mode = 'markers',
                               marker_color = corrs,
@@ -204,7 +188,7 @@ def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=
                         
             else:        
                 if initialize:
-                    fig = add_subplot(fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title,initialize=initialize)
+                    fig = add_subplot(df,fig,field,row_idx+1,col_idx+1,colorbar_x[col_idx],colorbar_y[row_idx],clen=0.14,cbar_title=cbar_title,initialize=initialize)
 
     fig.update_geos(scope='usa')
     fig.update_layout(
@@ -235,9 +219,9 @@ app = dash.Dash(__name__)
 server = app.server
 
 default_features = ['ghi','dhi','dni']
-default_eps = 0.1
+default_eps = 0.4
 default_n_clusters = 5
-default_min_pts = 15
+default_min_pts = 4
 
 global fig
 fig = None
@@ -338,5 +322,5 @@ def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
 
 
 if __name__ == '__main__':
-    #app.run_server(host='0.0.0.0', port=8050, debug=True)
-    app.run_server(debug=True, use_reloader=False)
+    app.run_server(host='0.0.0.0', port=8050, debug=True)
+    #app.run_server(debug=True, use_reloader=False)
