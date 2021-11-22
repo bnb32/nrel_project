@@ -4,36 +4,37 @@ from dash import dcc
 from dash import html
 from dash.dependencies import Input, Output
 import pandas as pd
-from sklearn import preprocessing
+#from sklearn import preprocessing
+from dask_ml import preprocessing
 from sklearn.cluster import DBSCAN #KMeans, DBSCAN
 from dask_ml.cluster import KMeans
+from dask.array import corrcoef
 import dask.dataframe as dd
 from plotly.subplots import make_subplots
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 
-df = dd.read_csv('nrel_df.csv')#pd.read_csv('nrel_df.csv')
+pdf = pd.read_csv('nrel_df.csv')
+df = dd.from_pandas(pdf,npartitions=4)
 
 def scale_data(df,features=None):
     if features is None:
         features = [c for c in df.columns if c != 'latitude' and 
                     c != 'longitude' and 'cluster' not in c]
-    x = df[features].values #returns a numpy array
     min_max_scaler = preprocessing.MinMaxScaler()
-    x_scaled = min_max_scaler.fit_transform(x)
-    df_scaled = pd.DataFrame(x_scaled)
-    return df_scaled
+    min_max_scaler.feature_names_in_=features
+    return min_max_scaler.fit_transform(df)
 
 def cluster_data_kmeans(df,n_clusters=8,features=None):
     df_scaled = scale_data(df,features)
     clusters = KMeans(n_clusters=n_clusters, random_state=0).fit(df_scaled)
-    df['kmeans_cluster'] = clusters.labels_
+    df['kmeans_cluster'] = dd.from_array(clusters.labels_)
     return df,clusters.inertia_
 
 def cluster_data_dbscan(df_scaled,eps=0.1,min_pts=15,features=None):
     df_scaled = scale_data(df,features)
     clusters = DBSCAN(eps=eps,min_samples=min_pts).fit(df_scaled)
-    df['dbscan_cluster'] = clusters.labels_
+    df['dbscan_cluster'] = dd.from_array(clusters.labels_)#pd.Series(clusters.labels_)
     return df
 
 def curvature(a):
@@ -96,8 +97,8 @@ def add_subplot(fig,field,row,col,x,y,clen=0.35,cbar_title='',initialize=False):
     return fig
 
 def closest_lat_lon(df,lat=40,lon=-105):
-    lats = df['latitude'].values.astype(float)
-    lons = df['longitude'].values.astype(float)
+    lats = df['latitude'].values.astype(float).compute()
+    lons = df['longitude'].values.astype(float).compute()
     diff = np.inf
     index = 0
     for i in range(len(lats)):
@@ -115,9 +116,9 @@ def get_corrs(df,lat=40,lon=-105,features=None):
                 #c != 'wind_speed' and c != 'clearsky_dhi' and
                 #c != 'clearsky_dni' and c != 'clearsky_ghi' and
                 #c != 'elevation' and c != 'landcover']
-    x_scaled = min_max_scaler.fit_transform(df[features])
-    df_scaled = pd.DataFrame(x_scaled)
-    df_corrs = df_scaled.T.corr()
+    min_max_scaler.feature_names_in_=features
+    df_scaled = min_max_scaler.fit_transform(df)
+    df_corrs = df_scaled.compute().T.corr() #dd.corrcoef(df_scaled.to_dask_array())
     return df_corrs.iloc[closest_lat_lon(df,lat=lat,lon=lon)]
 
 def generate_figure(df,fig,features=['ghi'],n_clusters=None,eps=None,lat=40,lon=-105,min_pts=3,initialize=False):
@@ -337,4 +338,5 @@ def update_output_div(eps,min_pts,n_clusters,features,lat,lon):
 
 
 if __name__ == '__main__':
+    #app.run_server(host='0.0.0.0', port=8050, debug=True)
     app.run_server(debug=True, use_reloader=False)
