@@ -5,12 +5,14 @@ from dash import html
 from dash.dependencies import Input, Output
 import pandas as pd
 from sklearn import preprocessing
-from sklearn.cluster import KMeans, DBSCAN
+from sklearn.cluster import DBSCAN #KMeans, DBSCAN
+from dask_ml.cluster import KMeans
+import dask.dataframe as dd
 from plotly.subplots import make_subplots
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 
-df = pd.read_csv('nrel_df.csv')
+df = dd.read_csv('nrel_df.csv')#pd.read_csv('nrel_df.csv')
 
 def scale_data(df,features=None):
     if features is None:
